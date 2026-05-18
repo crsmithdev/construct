@@ -124,9 +124,7 @@ Store a session summary at end.
 ## Git Discipline
 
 - Every task runs on a feature branch or worktree — never work directly on `main`.
-<!-- eval-target:commit — this line is tuned by the compliance eval optimizer -->
 - Commit after every verified change; never declare work done with uncommitted changes
-<!-- end eval-target:commit -->
 - Never leave a dirty working tree at end of task. All changes committed or explicitly deferred by the user.
 - Push after changes are accepted; squash when merging.
 - **For any non-trivial code task:** invoke the `git-workflow` skill at the start (Phase 1: Isolate — branch/worktree setup) and again when the work is complete (Phase 2: Land — verify, merge, push, cleanup).
