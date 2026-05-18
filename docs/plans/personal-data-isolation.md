@@ -42,7 +42,7 @@ Three principles. Each replaces a heavier mechanism from v1.
 
 1. **Move user-specific files outside the repo. Reference them with `@`-include.** No new loader. `src/core/CLAUDE.md` line 4 becomes `@~/.construct/identity/USER.md` (or absolute). Claude Code's `@`-include resolves it. No SessionStart hook, no `additionalContext` plumbing, no `~/.construct/identity/` schema.
 2. **Per-codebase context: use `<cwd>/CLAUDE.md`.** Already a Claude Code built-in. Auto-loads, walks parents, no basename collisions, no convention to teach. The v1 `~/.construct/contexts/<basename>/` mechanism is removed entirely.
-3. **History scrub is part of the plan, not "out of scope."** Scrubbing the working tree without scrubbing history is privacy theater — the email and USER.md content remain a `git log` away. Force-push to `main` is destructive and needs explicit go-ahead, but the steps are included rather than punted.
+3. **History gets wiped before public release.** The user has confirmed git history is disposable. Working-tree cleanup happens first (so the eventual published state has no PII at tip), then history is nuked in a single step before going public. This removes the "privacy theater" concern from the v1 plan — there will be no history left to leak from.
 
 ---
 
@@ -51,10 +51,9 @@ Three principles. Each replaces a heavier mechanism from v1.
 | # | Question | Default | Why |
 |---|---|---|---|
 | **D1** | SOUL.md / STYLE.md / AGENTS.md — rewrite as actually-generic, or move to `examples/identity/` as opt-in? | **Move to `examples/identity/`** | Rewriting takes hours and arguably destroys the value (they ARE opinionated; that's the point). Moving them under `examples/` makes the bias explicit — a user opts in by `cp examples/identity/STYLE.md ~/.construct/identity/STYLE.md`. The repo ships with no default identity at all, which is the only honest "generic." |
-| **D2** | Fixtures under `src/telemetry/__tests__/fixtures/` — redact `cwd`/`slug`/prompts, or accept the leak and move on? | **Redact in P1** | Fixtures get redistributed via `git clone`; redacting them costs an afternoon and removes a recurring source of "oh, his username is in this file too" findings. Accept means a future README rewrite still ships them. |
-| **D3** | Git history scrub: do it now (force-push to main), or after every leak is fixed at tip? | **After P1 tip-clean**, scrub once. | Force-push rewrites every commit hash. Doing it incrementally invalidates every open branch repeatedly. Do it once after the working tree is clean. |
+| **D2** | Fixtures under `src/telemetry/__tests__/fixtures/` — redact `cwd`/`slug`/prompts, or accept the leak and move on? | **Redact in P1** | Fixtures get redistributed via `git clone` from the wiped-and-republished repo; redacting them costs an afternoon and removes a recurring source of "oh, his username is in this file too" findings. Accept means a future README rewrite still ships them. |
 
-These are blocking — implementation diverges by choice.
+These are blocking — implementation diverges by choice. (History-scrub timing question from v1 is removed; user confirmed history will be wiped before publication.)
 
 ---
 
@@ -78,9 +77,9 @@ Single phase, ~10 commits. P1-style numbering for clarity, not for sequencing in
 | 12 | Hard-coded Greenshot workflow in `src/skills/ss/` and `src/commands/ss.md` — either parameterize via env (`CONSTRUCT_SCREENSHOT_DIR`) or move under `examples/skills/` as opt-in | `src/skills/ss/`, `src/commands/ss.md` |
 | 13 | Scrub `.claude/CLAUDE.md` (project-local dev rules) — generic port numbers, generic paths, drop the `/home/crsmi/...` citation | `.claude/CLAUDE.md` |
 | 14 | Hard-coded port numbers (3000/3001) in `src/commands/install.md`, `src/skills/code-test/`, `src/skills/design-review/references/verification.md` — pull from env or document as overridable | various |
-| 15 | History scrub (D3): `git filter-repo --path src/core/identity/USER.md --invert-paths`; `.mailmap` rewrite for author email; `git push --force-with-lease origin main`. **User executes this; agent does not force-push.** | git history |
+| 15 | Wipe history once tip is clean. Two options, user picks at publish time: (a) `git filter-repo --path src/core/identity/USER.md --invert-paths` + `.mailmap` for email + force-push (keeps commit structure, scrubs specific things). (b) Nuclear: new orphan branch with one squashed commit, reset main to it, force-push (no history at all). Option (b) is simpler and addresses every metadata leak (author, committer, co-authored-by, all prior content). **User executes this; agent does not force-push.** | git history |
 
-Steps 1–14 are non-destructive — feature branch, normal PR, normal merge. Step 15 is destructive and requires explicit user authorization (see §6).
+Steps 1–14 are non-destructive — feature branch, normal PR, normal merge. Step 15 is destructive but explicitly authorized in principle — execution still requires the user's go-ahead at publish time.
 
 ---
 
@@ -96,10 +95,9 @@ grep -rni "crsmi\|chris smith\|crsmithdev\|/home/crsmi\|~/construct" src/ packag
 
 ```bash
 # History sweep — after step 15
-git log --all --source --remotes --pretty=format:'%H %an <%ae>' -- 'src/core/identity/USER.md'
-# expected: empty
-git log --all --format='%ae' | sort -u
-# expected: anonymized email only
+git log --all --format='%H %an <%ae>' | head
+# expected (option a): no commits touching USER.md, .mailmap-rewritten email only
+# expected (option b): single commit, anonymized author/email
 ```
 
 ```bash
@@ -123,14 +121,12 @@ cd ../plugin && bun dist-plugin.ts && claude plugin validate dist/plugin
 
 ## 6. What this STILL does not solve
 
-Naming the gaps the red-team surfaced, so this plan doesn't pretend to do more than it does.
+After steps 1–15 the repo content and git history are clean. Two surfaces remain, both user-local and never in the repo:
 
-- **Commit author/committer is permanent metadata.** `.mailmap` rewrites display in `git log`, but the underlying `author/committer` bytes in the commit objects stay. Anyone with write access to the bare repo or a careful inspection sees the original. Only fix is filter-repo, which is destructive — covered in step 15.
-- **GitHub UI caches commit author, blame, and Issues/PRs** that referenced personal data. Even after force-push, GitHub's edge cache (and any fork/clone made before the rewrite) retains it. The plan cannot fix this; the user should consider whether the GitHub history is worth preserving at all (alternative: new repo, clean history, archive the old one private).
-- **Backups under `~/.construct/backups/`** captured pre-migration sessions with personal context. These are user-local, never committed — but if the user shares a debug bundle for a bug report, the PII rides along. Out of scope.
-- **Memory MCP storage at `~/.local/share/mcp-memory/sqlite_vec.db`** contains the user's memory entries verbatim. Not in the repo, not on the path to becoming so, but a separate privacy surface to be aware of.
+- **`~/.construct/backups/`** — captured pre-migration sessions with personal context. If the user shares a debug bundle for a bug report, the PII rides along.
+- **`~/.local/share/mcp-memory/sqlite_vec.db`** — memory MCP storage contains memory entries verbatim.
 
-If the goal is "this repo + clone history is acceptable to link from a resume," steps 1–15 are sufficient. If the goal is "every trace of authorship is gone," that's a bigger conversation and probably warrants a new repo rather than rewriting this one.
+Neither is on the path to becoming public; just worth being aware of. If a clone of the repo is made *before* step 15 fires (e.g., a fork, a GitHub Actions cache snapshot), that clone retains the pre-scrub state. Step 15 should fire close in time to the first public link.
 
 ---
 
