@@ -1,175 +1,150 @@
 # Personal data isolation
 
-**Why this is its own plan:** Red-team finding F-1 against `docs/plans/plugin-packaging.md` flagged six files in `src/` that ship author-identifying data (names, emails, hard-coded `/home/crsmi/` paths). The repo is on a public GitHub remote and the planned plugin distribution makes it worse — every external user would receive Chris's identity verbatim, plus model-facing instructions hard-coded to his filesystem.
+**v2** — replaces an earlier draft that was 5× this size. The earlier version invented a `~/.construct/contexts/<basename>/CONTEXT.md` loader, an `*.local.md` override mechanism, and a `USER.template.md` bootstrap — a red-team panel pointed out that (a) per-project context is what Claude Code's built-in `<cwd>/CLAUDE.md` already does, (b) no current consumer asked for overrides, and (c) USER.md relocation is one line of `@`-include change, not a hook. This version is what's actually needed.
 
-This is gating both the plugin-packaging work and any further public-facing artifact. Resolving it cleanly also fixes a long-standing problem with the existing `bun install.ts` install path: Construct's identity layer is currently tangled together with its behavioral defaults, making it impossible to ship one without leaking the other.
-
-**Out of scope:** rewriting git history. PII already in past commits stays there unless the user separately runs `git filter-repo` after this plan lands. That's a one-line follow-up, not part of the structural fix.
+**Why this is its own plan:** Plugin-packaging red-team finding F-1 (`docs/plans/plugin-packaging.md` on `feat/plugin-packaging`) flagged personal data in `src/`. The repo is public; the planned plugin distribution would re-publish it. Resolving this gates plugin work and unblocks linking the repo externally.
 
 ---
 
 ## 1. Leak inventory
 
-Verified by `grep -rln "crsmi\|Chris Smith\|crsmithdev\|/home/crsmi" src/` on `main` at commit `2455bd3`.
+`grep -rni "crsmi\|chris\|smith\|crsmithdev\|/home/\|~/construct\|pacific\|wsl\|windows 11" src/ package.json` — **no `-v` filters**. The earlier inventory filtered out `__tests__/` and `fixtures/`, which is exactly where some of the largest leaks live.
 
-| File | What leaks | Severity | Surface |
+| Source | What leaks | Severity |
+|---|---|---|
+| `src/core/identity/USER.md` | full personal profile (name, email, OS, env, port preferences, tech stack, working style, git prefs) | high |
+| `src/core/identity/soul.json` | `author.name`, `displayName`, `description`, `tags`, `category` — all personalized | high |
+| `package.json` `author` field | `"name": "Chris Smith"` (and possibly email) | high |
+| `src/telemetry/__tests__/fixtures/e2e/session*/*.jsonl` | committed JSONL transcripts — `cwd:"/home/crsmi/construct"`, real session UUIDs + slugs, real prompts Chris typed, real tool inputs/outputs | high |
+| `src/agents/codebase-auditor.md:12,16` + `description:` frontmatter | hard-codes `/home/crsmi/construct/` AND names "Construct" in model-facing prose | medium |
+| `src/skills/ss/SKILL.md` + `src/commands/ss.md` | hard-coded `~/.local/bin/latest-shot`, `~/shots/*.png` (Greenshot workflow) | medium |
+| `src/commands/sketch.md` | `~/construct/docs/sketches/` user path in model-facing command | medium |
+| `src/data/src/paths.ts:32` | `MEMORY_DB_PATH` defaults to `~/.local/share/mcp-memory/sqlite_vec.db` (encodes uv install layout) | medium |
+| `src/memory/hooks/memory-extract-stop.ts:26-28` | `MEMORY_VENV_PYTHON` default encodes uv tool layout | medium |
+| `src/rules/docs/RULES.md:68` | absolute path citation `/home/crsmi/construct/.claude/CLAUDE.md:18` | low |
+| `src/ui/web/src/utils/format.ts:166-167` | comment examples: `"-home-crsmi-construct" → "crsmi/construct"` | low |
+| `src/ui/api/src/routes/observability.ts:291` | same | low |
+| `src/telemetry/__tests__/e2e.test.ts:212` | production test uses `"-home-crsmi-construct"` as literal | low |
+| `.claude/CLAUDE.md` (project-local dev rules, committed) | encodes author's workflow, dev port assumptions, references `/home/crsmi/construct/.claude/CLAUDE.md:18` | low |
+
+Counts (from red-team):
+- 5 commits touch `src/core/identity/USER.md` (`d603b65`, `8684e50`, `1cbe4fd`, `c0e71d9`, `89bd480`) plus pre-rename history under `construct/core/identity/USER.md` (`b779f48`).
+- Author email `crsmithdev@gmail.com` is in every commit's `git log --format='%ae'`.
+- Test fixtures contain 764 grep hits for `crsmi` across 8 files.
+
+**Counter-claim corrected:** the v1 plan asserted SOUL.md, STYLE.md, AGENTS.md were "already generic — no scrub needed." That's wrong. SOUL.md hard-codes "Construct" as the assistant's identity and codifies personal boundaries ("Health/medical reminders are suggestions"). STYLE.md is Chris's personal communication contract. AGENTS.md contains a `<SUBAGENT-STOP>` directive and the "1% rule" — Construct-specific harness wiring. These are author's preferences shipped as universal defaults. They aren't PII but they aren't neutral either — see §3 decision D1.
+
+---
+
+## 2. Approach
+
+Three principles. Each replaces a heavier mechanism from v1.
+
+1. **Move user-specific files outside the repo. Reference them with `@`-include.** No new loader. `src/core/CLAUDE.md` line 4 becomes `@~/.construct/identity/USER.md` (or absolute). Claude Code's `@`-include resolves it. No SessionStart hook, no `additionalContext` plumbing, no `~/.construct/identity/` schema.
+2. **Per-codebase context: use `<cwd>/CLAUDE.md`.** Already a Claude Code built-in. Auto-loads, walks parents, no basename collisions, no convention to teach. The v1 `~/.construct/contexts/<basename>/` mechanism is removed entirely.
+3. **History scrub is part of the plan, not "out of scope."** Scrubbing the working tree without scrubbing history is privacy theater — the email and USER.md content remain a `git log` away. Force-push to `main` is destructive and needs explicit go-ahead, but the steps are included rather than punted.
+
+---
+
+## 3. Decisions to resolve before P1 lands
+
+| # | Question | Default | Why |
 |---|---|---|---|
-| `src/core/identity/USER.md` | full personal profile — name, email, env, project context, working/comm prefs, git prefs | high | loaded into every Construct session via `@`-include |
-| `src/core/identity/soul.json` | `"name": "Chris Smith"` field | high | metadata file, shipped intact |
-| `src/agents/codebase-auditor.md:12,16` | hard-codes `/home/crsmi/construct/src/` as audit scope and `/home/crsmi/construct` as working directory | medium | **model-facing instruction** — agent will literally try to operate against that path |
-| `src/rules/docs/RULES.md:68` | absolute path citation `/home/crsmi/construct/.claude/CLAUDE.md:18` | low | rule provenance citation |
-| `src/ui/web/src/utils/format.ts:166` | inline comment shows `"-home-crsmi-construct" → "crsmi/construct"` as transformation example | low | code comment |
-| `src/ui/api/src/routes/observability.ts:291` | same pattern in a comment | low | code comment |
+| **D1** | SOUL.md / STYLE.md / AGENTS.md — rewrite as actually-generic, or move to `examples/identity/` as opt-in? | **Move to `examples/identity/`** | Rewriting takes hours and arguably destroys the value (they ARE opinionated; that's the point). Moving them under `examples/` makes the bias explicit — a user opts in by `cp examples/identity/STYLE.md ~/.construct/identity/STYLE.md`. The repo ships with no default identity at all, which is the only honest "generic." |
+| **D2** | Fixtures under `src/telemetry/__tests__/fixtures/` — redact `cwd`/`slug`/prompts, or accept the leak and move on? | **Redact in P1** | Fixtures get redistributed via `git clone`; redacting them costs an afternoon and removes a recurring source of "oh, his username is in this file too" findings. Accept means a future README rewrite still ships them. |
+| **D3** | Git history scrub: do it now (force-push to main), or after every leak is fixed at tip? | **After P1 tip-clean**, scrub once. | Force-push rewrites every commit hash. Doing it incrementally invalidates every open branch repeatedly. Do it once after the working tree is clean. |
 
-The two `low` items are docstring examples — they exist because Chris's username is the natural fixture for explaining what a session-dir-name transformer does. Worth scrubbing, not load-bearing.
+These are blocking — implementation diverges by choice.
 
 ---
 
-## 2. Proposed structure
+## 4. Steps
 
-Extend the existing `~/.construct/` user-data convention to cover identity and codebase-specific context.
+Single phase, ~10 commits. P1-style numbering for clarity, not for sequencing into phases.
 
-```
-~/.construct/
-├── identity/
-│   ├── USER.md                  # personal profile (was in repo)
-│   ├── SOUL.local.md            # optional override of repo default
-│   ├── STYLE.local.md           # optional override of repo default
-│   └── AGENTS.local.md          # optional override of repo default
-├── contexts/
-│   ├── construct/CONTEXT.md     # auto-load when cwd basename matches
-│   ├── some-other-repo/CONTEXT.md
-│   └── ...
-└── (existing: construct.db, sessions/, signals/, memory/, backups/)
-```
+| # | Change | Files |
+|---|---|---|
+| 1 | Broaden the audit grep, run it, fix every hit | (audit script in commit message — no committed file) |
+| 2 | Scrub `package.json` `author` field | `package.json` |
+| 3 | Rewrite `soul.json` to schema-only (drop `name`, `displayName`, `description`, `tags`, `category`; fix the dead `IDENTITY.md` reference noted in red-team) | `src/core/identity/soul.json` |
+| 4 | Parameterize `codebase-auditor.md` — scope from `$1` or cwd; rewrite `description:` frontmatter to not name "Construct" | `src/agents/codebase-auditor.md` |
+| 5 | Make `rules/docs/RULES.md:68` citation relative | `src/rules/docs/RULES.md` |
+| 6 | Sanitize comments in `format.ts` and `observability.ts` (use `acme/project` not `crsmi/construct` as the example transformation) | `src/ui/web/src/utils/format.ts`, `src/ui/api/src/routes/observability.ts` |
+| 7 | Fix `src/telemetry/__tests__/e2e.test.ts:212` literal `-home-crsmi-construct` — use a fixture-derived value, not a hardcoded string | `src/telemetry/__tests__/e2e.test.ts` |
+| 8 | Decide on D1; either rewrite SOUL/STYLE/AGENTS or `git mv` to `examples/identity/` and update `src/core/CLAUDE.md` @-includes accordingly | `src/core/identity/` or `examples/identity/`, `src/core/CLAUDE.md` |
+| 9 | Decide on D2; if redact, walk every JSONL fixture and replace `cwd`, `slug`, prompt content, author email | `src/telemetry/__tests__/fixtures/` |
+| 10 | `cp src/core/identity/USER.md ~/.construct/identity/USER.md` (manual, once). `git rm src/core/identity/USER.md`. Change `src/core/CLAUDE.md:4` from `@identity/USER.md` to `@~/.construct/identity/USER.md`. Add `src/core/identity/USER.md` to `.gitignore` so a future regression can't re-introduce it | `src/core/CLAUDE.md`, `.gitignore`, `src/core/identity/USER.md` (deletion) |
+| 11 | Scrub user-tool path defaults: `src/data/src/paths.ts:32` and `src/memory/hooks/memory-extract-stop.ts:26-28` — default to a config-derived path or fail loudly without env var | `src/data/src/paths.ts`, `src/memory/hooks/memory-extract-stop.ts` |
+| 12 | Hard-coded Greenshot workflow in `src/skills/ss/` and `src/commands/ss.md` — either parameterize via env (`CONSTRUCT_SCREENSHOT_DIR`) or move under `examples/skills/` as opt-in | `src/skills/ss/`, `src/commands/ss.md` |
+| 13 | Scrub `.claude/CLAUDE.md` (project-local dev rules) — generic port numbers, generic paths, drop the `/home/crsmi/...` citation | `.claude/CLAUDE.md` |
+| 14 | Hard-coded port numbers (3000/3001) in `src/commands/install.md`, `src/skills/code-test/`, `src/skills/design-review/references/verification.md` — pull from env or document as overridable | various |
+| 15 | History scrub (D3): `git filter-repo --path src/core/identity/USER.md --invert-paths`; `.mailmap` rewrite for author email; `git push --force-with-lease origin main`. **User executes this; agent does not force-push.** | git history |
 
-**Repo ships only:**
-
-| File | What it contains |
-|---|---|
-| `src/core/identity/SOUL.md` | generic behavior philosophy (already generic — no scrub needed) |
-| `src/core/identity/STYLE.md` | generic communication style (already generic — no scrub needed) |
-| `src/core/identity/AGENTS.md` | generic workflow rules (already generic — no scrub needed) |
-| `src/core/identity/USER.template.md` | sanitized placeholders (`Name: <your name>`, etc.) |
-| `src/core/identity/soul.json` | schema/version only — no `name` field |
-
-`src/core/identity/USER.md` removed. The four currently shipped identity files are kept as defaults; what changes is that `USER.md` becomes user-provided rather than repo-provided, and the other three become user-overridable.
+Steps 1–14 are non-destructive — feature branch, normal PR, normal merge. Step 15 is destructive and requires explicit user authorization (see §6).
 
 ---
 
-## 3. Loader
+## 5. Verification
 
-A single hook reads from `~/.construct/identity/` and `~/.construct/contexts/` and emits the concatenated content as `additionalContext` on `SessionStart`. Works identically for both install paths:
-
-- `bun install.ts` install — hook fires from `~/.claude/settings.json` `hooks.SessionStart`
-- Plugin install — hook fires from plugin `hooks/hooks.json` `SessionStart`
-
-Read order (each step optional, missing files skipped silently):
-
-1. Repo defaults from `${ROOT}/core/identity/{SOUL,STYLE,AGENTS}.md` — where `${ROOT}` is `~/.claude/construct/` for dev install, `${CLAUDE_PLUGIN_ROOT}/` for plugin
-2. User overrides from `~/.construct/identity/{SOUL,STYLE,AGENTS}.local.md` — each one *replaces* the corresponding default (decision O2)
-3. User profile from `~/.construct/identity/USER.md`
-4. Codebase context from `~/.construct/contexts/<basename(cwd)>/CONTEXT.md`
-
-If `~/.construct/identity/` is empty (fresh user, never set up), the loader emits just the repo defaults. Construct still functions; the personal profile is just absent.
-
-**Implementation note:** the existing `src/memory/hooks/context-restore-start.ts` already runs on SessionStart. The identity loader can extend it rather than adding a second hook. One hook, one read pass, one `additionalContext` emission.
-
----
-
-## 4. Migration
-
-For the only currently affected user (Chris) — the existing `bun install.ts` install has `src/core/identity/USER.md` deployed at `~/.claude/construct/core/identity/USER.md`. The migration is one-time:
-
-1. `install.ts` on next run: if `~/.construct/identity/USER.md` doesn't exist AND `~/.claude/construct/core/identity/USER.md` does, `cp` the latter to the former, then proceed normally.
-2. After that run, the repo's `src/core/identity/USER.md` is deleted in a separate commit (so the migration step has something to copy *from* during the transition).
-3. Subsequent installs are no-ops on this path.
-
-For new users (post-scrub): `install.ts` creates `~/.construct/identity/` and copies `USER.template.md` to `~/.construct/identity/USER.md` if and only if no file exists there. User fills it in.
-
-**Git history:** PII in past commits is unaffected by this restructure. If history scrub matters:
+The v1 verification grep filtered out `__tests__/` and `fixtures/`. v2 does not.
 
 ```bash
-git filter-repo --path src/core/identity/USER.md --invert-paths
-git filter-repo --replace-text <(echo 'crsmi==>USER')
-git push --force-with-lease
+# Working tree sweep — should return empty
+grep -rni "crsmi\|chris smith\|crsmithdev\|/home/crsmi\|~/construct" src/ package.json .claude/ \
+  | grep -v "examples/identity/"   # opt-in surface; allowed if D1 picks "move"
 ```
 
-Treat as a separate decision after this plan lands. Force-push to `main` is destructive and needs explicit go-ahead.
+```bash
+# History sweep — after step 15
+git log --all --source --remotes --pretty=format:'%H %an <%ae>' -- 'src/core/identity/USER.md'
+# expected: empty
+git log --all --format='%ae' | sort -u
+# expected: anonymized email only
+```
+
+```bash
+# Install roundtrip — USER.md still loaded via @-include
+bun install.ts && cat ~/.claude/construct/core/CLAUDE.md | head -5
+# expected: line 4 reads "@~/.construct/identity/USER.md"; ~/.construct/identity/USER.md exists and contains the moved content
+```
+
+```bash
+# Per-codebase context — verify Claude Code's built-in works
+# (Trivial: create ./CLAUDE.md in any project dir; start Claude Code; it loads.)
+```
+
+```bash
+# Plugin packaging — after this lands, switch to plugin worktree and re-run
+cd ../plugin && bun dist-plugin.ts && claude plugin validate dist/plugin
+# expected: validate passes; dist/plugin/core/identity/ has no USER.md
+```
 
 ---
 
-## 5. Phases
+## 6. What this STILL does not solve
 
-| Phase | What lands | Verification |
-|---|---|---|
-| **P1 — Repo scrub** (no behavior change) | Remove `name` from `soul.json`; parameterize `codebase-auditor.md` scope (default to cwd or first arg); make `rules/docs/RULES.md` citation relative; sanitize comments in `format.ts` + `observability.ts` | `grep -rln "crsmi\|Chris Smith\|crsmithdev\|/home/crsmi" src/` returns only `src/core/identity/USER.md` (handled in P3) |
-| **P2 — Loader + override mechanism** | Extend `context-restore-start.ts` (or add a dedicated hook) to read `~/.construct/identity/` + `~/.construct/contexts/<basename(cwd)>/`. Add `~/.construct/identity/` + `~/.construct/contexts/` dir creation to `install.ts` | Fresh Claude Code session shows SOUL/STYLE/AGENTS injected from defaults; a populated `~/.construct/identity/STYLE.local.md` replaces the default |
-| **P3 — USER.md migration** | Add `USER.template.md`. `install.ts` migrates existing `~/.claude/construct/core/identity/USER.md` → `~/.construct/identity/USER.md` if absent. Remove `src/core/identity/USER.md` from repo. Update `src/core/CLAUDE.md` to drop the `@USER.md` `@`-include — the loader handles it now | After install: `~/.construct/identity/USER.md` exists with current contents; repo has no `USER.md`; session still has personal profile in context |
-| **P4 — Verification gate** | Full leak sweep + both install paths exercised | `grep -rln "crsmi\|Chris Smith\|crsmithdev\|/home/crsmi" src/` returns no hits; `bun test.ts` passes; `claude plugin validate dist/plugin` passes (in the plugin worktree) |
+Naming the gaps the red-team surfaced, so this plan doesn't pretend to do more than it does.
 
-P1 is non-breaking and can land first. P2 + P3 are the structural change and should land together (otherwise USER.md is missing from sessions between commits). P4 is the gate.
+- **Commit author/committer is permanent metadata.** `.mailmap` rewrites display in `git log`, but the underlying `author/committer` bytes in the commit objects stay. Anyone with write access to the bare repo or a careful inspection sees the original. Only fix is filter-repo, which is destructive — covered in step 15.
+- **GitHub UI caches commit author, blame, and Issues/PRs** that referenced personal data. Even after force-push, GitHub's edge cache (and any fork/clone made before the rewrite) retains it. The plan cannot fix this; the user should consider whether the GitHub history is worth preserving at all (alternative: new repo, clean history, archive the old one private).
+- **Backups under `~/.construct/backups/`** captured pre-migration sessions with personal context. These are user-local, never committed — but if the user shares a debug bundle for a bug report, the PII rides along. Out of scope.
+- **Memory MCP storage at `~/.local/share/mcp-memory/sqlite_vec.db`** contains the user's memory entries verbatim. Not in the repo, not on the path to becoming so, but a separate privacy surface to be aware of.
 
----
-
-## 6. Open design choices
-
-These are the three questions the previous turn raised. Recommended defaults below; the implementation will use these unless redirected.
-
-| # | Choice | Default | Rationale |
-|---|---|---|---|
-| **O1** | Codebase-context matcher: `basename(cwd)`, full-path slug, or both? | **basename(cwd)** | Simple. Collides only if two repos share a name (rare). Full-path slug breaks if the repo moves. |
-| **O2** | `*.local.md` semantics: override (replace) or append? | **override** | The user is opting into "my version, not yours." Append is more flexible but the user has to remember what they're adding to. |
-| **O3** | Existing `USER.md` migration: `install.ts` bootstrap, manual move, or in-repo sanitize? | **`install.ts` bootstrap** | Zero-touch for the existing dev install. One-time copy-then-delete. The other two require coordinated manual steps. |
+If the goal is "this repo + clone history is acceptable to link from a resume," steps 1–15 are sufficient. If the goal is "every trace of authorship is gone," that's a bigger conversation and probably warrants a new repo rather than rewriting this one.
 
 ---
 
 ## 7. What this unblocks
 
-After P4 ships:
-
-- Plugin packaging (Phase 2 of `construct-public-face.md`) can resume — the fatal F-1 finding is resolved
-- The repo is safe to link from a resume / blog / GitHub Pages
-- Phase 1 of `construct-public-face.md` (README rewrite) becomes safer to land publicly
-- Future codebase-specific notes (working in `~/some-other-repo/`) work for free via the contexts mechanism
+- **Plugin packaging** (`docs/plans/plugin-packaging.md`) — F-1 cleared.
+- **Phase 1 of `construct-public-face.md`** — README rewrite + SPEC.md + demo can land without re-publishing PII.
+- **Per-codebase context** — already works via `<cwd>/CLAUDE.md`; no new infrastructure needed. The user puts notes for `~/some-other-repo/` in `~/some-other-repo/CLAUDE.md` and Claude Code loads them when launched from that cwd.
 
 ---
 
-## 8. Verification
+## 8. Open coordination
 
-Leak sweep:
-
-```bash
-grep -rln "crsmi\|Chris Smith\|crsmithdev\|/home/crsmi" src/ | grep -v __tests__ | grep -v fixtures
-# expected: empty
-```
-
-Loader smoke test (after P2):
-
-```bash
-# Fresh-ish ~/.construct/ with no identity dir
-rm -rf /tmp/test-construct && CONSTRUCT_DATA_ROOT=/tmp/test-construct \
-  bun src/memory/hooks/context-restore-start.ts <<<'{"session_id":"test","cwd":"/tmp"}'
-# expected: emits SOUL+STYLE+AGENTS, no USER, no CONTEXT
-
-# With a populated identity dir
-mkdir -p /tmp/test-construct/identity
-echo "Name: Test User" > /tmp/test-construct/identity/USER.md
-CONSTRUCT_DATA_ROOT=/tmp/test-construct \
-  bun src/memory/hooks/context-restore-start.ts <<<'{"session_id":"test","cwd":"/tmp"}'
-# expected: emits SOUL+STYLE+AGENTS+USER
-```
-
-Install roundtrip (after P3):
-
-```bash
-bun install.ts && bun test.ts
-# expected: USER.md migrated to ~/.construct/identity/, src/core/identity/USER.md absent, all tests pass
-```
-
-Plugin validate (after P3, in the plugin worktree):
-
-```bash
-bun dist-plugin.ts && claude plugin validate dist/plugin
-# expected: passes; no USER.md in dist/plugin/core/identity/
-```
+This plan and the plugin-packaging branch (`feat/plugin-packaging`) cross-depend:
+- This must land first (F-1 gate).
+- Plugin's `dist-plugin.ts` ships `src/core/identity/` verbatim — after step 10, the builder produces a plugin with no USER.md (correct). Re-validate plugin output after this plan lands.
+- If D1 picks "move to `examples/identity/`," `dist-plugin.ts` should also skip `examples/`. Add to SKIP_DIRS.
