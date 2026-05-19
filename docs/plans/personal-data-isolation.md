@@ -109,11 +109,12 @@ diff -q ~/.construct/identity/USER.md <(echo "$KNOWN_CONTENT")
 
 ## What this does NOT address
 
-These are real but separate concerns. Each gets its own commit / plan when relevant.
+Tracked in `docs/plans/publish-readiness.md` — the single living checklist for everything else that must be scrubbed before publish. Highlights of what lives there:
 
-- `package.json` `author` field, `soul.json` `name/displayName/etc`, `codebase-auditor.md` hard-coded paths, `rules/docs/RULES.md:68` citation, comment-username leaks in `format.ts` / `observability.ts`, `e2e.test.ts:212` literal, fixture username leaks, `.claude/CLAUDE.md` workflow scrub, Greenshot/port-number generalization
-- Git history retention (handle at publish time, separate destructive op)
-- Plugin user override-include resolution (per Phase 2 F-4 from prior red-teams — plugin install creates no `~/.construct/identity/`, so plugin users get broken `@~/.construct/...` includes; handle in `feat/plugin-packaging` work)
-- Trust-prompt UX on first external `@~/` import (per V3 — if this is a problem, address when implementing, not now)
+- Other identity surfaces: `package.json`, `soul.json`, `codebase-auditor.md` paths, doc citations, comment usernames, test fixtures, `.claude/CLAUDE.md` workflow lines
+- Port-number + Greenshot generalization
+- Git history wipe (destructive, user-executed at publish time)
+- Plugin-side override resolution (Phase 2 F-4)
+- V3 trust-prompt documentation (resolved as one-time + reversible — needs README mention only)
 
-These are listed so the plan doesn't pretend to do more than it does, not because the plan should grow to cover them.
+Listed there, not here, so they don't get archived when this plan merges.
