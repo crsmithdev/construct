@@ -40,7 +40,7 @@ Claude Code merges `.claude/` (project) with `~/.claude/` (global) at runtime. I
 ## Server
 
 - **Prod:** port 3000 — systemd `construct-ui.service`, deployed via `bun install.ts`
-- **User dev:** port 3001 — `bun run dev` from repo root. May or may not be running; **it belongs to the user**, not to you. Never assume it serves your code.
+- **Human dev:** port 3001 — `bun run dev` from repo root. Started by whoever is actively iterating on the UI; may or may not be running. If it is, it serves *their* working tree from whatever branch they're on — agents must never verify against 3001 or assume it serves the agent's code.
 - **Agent verification:** ephemeral, free port ≥ 3002, spawned per task and killed when done.
 
 All three share data at `~/.construct/`.
@@ -131,6 +131,6 @@ If you pipe stdin to a hook script directly (e.g. `echo '{...}' | bun src/core/h
 | Backend logic works | `bun test.ts` passes | Running install.ts or starting a new server |
 | Frontend compiles | `bun run build` in `src/ui` passes | "TypeScript looks correct" |
 | UI changes work | `bun run ui:smoke` passes (loads every route in a real browser, asserts no render errors or 5xx) | `bun run build` alone — compilation does not catch runtime render errors |
-| Worktree changes work | `bun test.ts` + `bun run build` + `bun run ui:smoke` from worktree root | Testing against the 3001 server (which serves the user's code, not yours) |
+| Worktree changes work | `bun test.ts` + `bun run build` + `bun run ui:smoke` from worktree root | Testing against the 3001 server (which serves the active human dev's working tree, not the agent's) |
 
 **UI "done" means the page actually loads.** For any change that touches `src/ui/**`, an API route consumed by the UI, or shared types, `bun run ui:smoke` is a required gate before claiming success. It builds the bundle, boots the API, and navigates every route in headless Chromium — catching runtime render errors, API 500s, and empty renders that `bun test.ts` and `bun run build` miss. If you cannot run it (no Chromium, sandbox restrictions), say so explicitly; do not claim success.

@@ -13,7 +13,7 @@ Each row is a discrete scrub. Tackle individually; none block any other. Mark wi
 - [x] **5. Comment-username leaks** — `observability.ts:291` and `format.ts:166-167` comments use generic `-home-user-project` example.
 - [x] **6. `src/tests/e2e.test.ts:212` literal** — `projDir` now `-home-testuser-construct`; encoding logic still exercises the same code path.
 - [x] **7. Fixture username leaks (broad sweep)** — `sed crsmi → testuser` across all `src/telemetry/__tests__/fixtures/`. 528 tests still green.
-- [ ] **8. `.claude/CLAUDE.md` workflow scrub** — re-audit needed; most lines are legitimate repo-dev guidance (ports, worktree rules). Decide what's actually personal vs how-to-work-in-this-repo.
+- [x] **8. `.claude/CLAUDE.md` workflow scrub** — audited. File is repo-dev guidance, not personal data. Only fix needed: tightened "user owns 3001" framing to "active human dev's working tree, not the agent's" so the role distinction is explicit rather than relying on an implicit personal-pronoun reading.
 - [x] **9. Greenshot reference** — `src/commands/ss.md` generalized to `SHOTS_DIR` / `SHOTS_LATEST` env vars. Port numbers (3000/3001/3002) intentionally kept — they're Construct's actual architecture, not personal config.
 
 ## Other pre-publish concerns
