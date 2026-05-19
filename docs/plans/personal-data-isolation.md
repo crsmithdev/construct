@@ -77,11 +77,9 @@ The AGENTS.md walkthrough was done this session: extract lines 80 ("Don't ask 's
 
 USER.md asymmetry: kept as bare `USER.md` (no `.override` suffix) since it has no repo base — it's primary, not an override.
 
-### 4. dist-plugin.ts author scrub
+### 4. ~~dist-plugin.ts author scrub~~
 
-The plugin builder at `dist-plugin.ts:55-58` hard-codes `{"name": "Chris Smith", "url": "..."}` into the manifest emitter. Even after USER.md moves, every plugin build re-leaks the author via `dist/plugin/.claude-plugin/plugin.json`. Either read from env (`CONSTRUCT_AUTHOR_NAME`, `CONSTRUCT_AUTHOR_URL`) or drop the author field entirely.
-
-Lives on `feat/plugin-packaging` worktree. Either land there, or coordinate after this plan's branch merges.
+Moot. Plugin distribution dropped (see `docs/plans/publish-readiness.md` → "Distribution decision"). `dist-plugin.ts` and the `feat/plugin-packaging` branch are dead.
 
 ### 5. Test + doc drift fix
 

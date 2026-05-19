@@ -19,8 +19,19 @@ Each row is a discrete scrub. Tackle individually; none block any other. Mark wi
 ## Other pre-publish concerns
 
 - [ ] **10. Git history retention** — wipe before publish. Options: `git filter-repo` (surgical, keeps history shape) or orphan-branch nuke (destructive, removes all email/identity from commit objects). User-executed at publish time; agent does NOT force-push.
-- [ ] **11. Plugin user override-include resolution** (Phase 2 F-4 from prior red-team) — plugin install creates no `~/.construct/identity/`, so plugin users get broken `@~/.construct/...` includes from the shipped base CLAUDE.md chain. Handle inside `feat/plugin-packaging` work — likely the plugin installer should create the user-side dir on first run.
+- [x] **11. Plugin user override-include resolution** — dissolved. Plugin distribution dropped (see "Distribution decision" below). The `bun install.ts` path always creates `~/.construct/identity/`, so the original concern no longer applies.
 - [ ] **12. Trust-prompt UX on first external `@~/`** (V3 from personal-data interview) — resolved as one-time dialog, reversible via settings. Action: document the prompt in README/INSTALL.md so first-time users know what they're being asked. No code change needed.
+
+## Distribution decision (2026-05-19)
+
+Construct ships **CLI-only** via `bun install.ts`. The plugin packaging direction was abandoned after:
+
+- Claude Code plugin lifecycle hooks (PreInstall/PostInstall) don't exist — feature request [#11240](https://github.com/anthropics/claude-code/issues/11240) closed as duplicate.
+- SessionStart-as-installer workaround broken on first run for marketplace plugins ([#10997](https://github.com/anthropics/claude-code/issues/10997)).
+- Plugins can't ship a UI bundle, run a daemon, write systemd units, or create the DB — Construct's backend (research worker, observability UI, memory MCP, goals) needs all of these.
+- Dual distribution paths (plugin + CLI) doubled the maintenance and introduced drift risk without delivering anything the CLI couldn't.
+
+`feat/plugin-packaging` branch killed locally; remote branch preserved on origin for revival if the lifecycle-hook situation changes. `dist-plugin.ts` is dead code wherever it appears.
 
 ## Find-and-confirm one-liners
 
