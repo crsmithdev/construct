@@ -7,7 +7,9 @@ All paths relative to `~/.claude/`. Run every check. Do not skip or summarize.
 - `CLAUDE.md` exists and contains `# Construct`
 - `settings.json` exists and is valid JSON (`jq . settings.json`)
 - `ccstatusline` is on PATH (`which ccstatusline`)
-- Identity files (⚠ if missing — optional): `SOUL.md`, `IDENTITY.md`, `STYLE.md`, `USER.md` in `construct/core/identity/`
+- Identity base files: `AGENTS.md`, `SOUL.md`, `STYLE.md` in `construct/core/identity/`
+- Personal profile `USER.md` lives outside the install dir at `~/.construct/identity/USER.md` (user-managed; not deployed by installer)
+- Optional user overrides at `~/.construct/identity/{AGENTS,SOUL,STYLE}.override.md` are loaded after each base via `@~/` includes
 
 ## Registration
 
@@ -16,6 +18,6 @@ All paths relative to `~/.claude/`. Run every check. Do not skip or summarize.
 
 ## Data
 
-- Identity files are non-empty (0 bytes = data loss on upgrade)
+- Identity base files are non-empty (0 bytes = repo damage, not a user issue)
 - `CLAUDE.md` retains user content above `# Construct` (if upgrading)
 - `CLAUDE.md` under 300 lines (⚠ if over)
