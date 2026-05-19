@@ -6,15 +6,15 @@ Each row is a discrete scrub. Tackle individually; none block any other. Mark wi
 
 ## Identity leaks (deferred from personal-data-isolation)
 
-- [ ] **1. `package.json` `author` field** — drop, or set to `"Construct"`. Check for other personal fields (`bugs.email`, `repository.url` if a personal URL).
-- [ ] **2. `soul.json`** — `name`, `displayName`, `description`, `tags`, `category`. Either genericize or move user-specific values to the override mechanism.
-- [ ] **3. `src/agents/codebase-auditor.md` hard-coded paths** — replace `~/construct/` and `/home/crsmi/` literals with relative / discovered paths.
-- [ ] **4. `src/rules/docs/RULES.md:68` citation** — strip or generalize the personal citation example.
-- [ ] **5. Comment-username leaks** — `src/format.ts`, `src/observability.ts`. Grep for `crsmi`/`crsmithdev`, scrub.
-- [ ] **6. `src/tests/e2e.test.ts:212` literal** — replace hardcoded string with a fixture/generic value.
-- [ ] **7. Fixture username leaks (broad sweep)** — grep all fixtures for `crsmi*`, replace with `testuser` (or similar).
-- [ ] **8. `.claude/CLAUDE.md` workflow scrub** — personal workflow lines (e.g. "port 3001 belongs to user"). Decide what's repo-dev guidance vs personal preference; trim personal.
-- [ ] **9. Port numbers + Greenshot references** — `3000/3001/3002` and Greenshot mentions in docs/code. Move to config or doc as examples, not mandates.
+- [x] **1. `package.json` `author` field** — already absent. No `author`/`bugs.email`/`repository` personal fields present.
+- [x] **2. `soul.json`** — deleted; nothing read it and it pointed at a removed `IDENTITY.md`. Identity now lives in AGENTS/SOUL/STYLE base + user overrides.
+- [x] **3. `src/agents/codebase-auditor.md` hard-coded paths** — replaced `/home/crsmi/construct` with relative `src/` and "run from repo root".
+- [x] **4. `src/rules/docs/RULES.md:68` citation** — citation uses relative `.claude/CLAUDE.md` path.
+- [x] **5. Comment-username leaks** — `observability.ts:291` and `format.ts:166-167` comments use generic `-home-user-project` example.
+- [x] **6. `src/tests/e2e.test.ts:212` literal** — `projDir` now `-home-testuser-construct`; encoding logic still exercises the same code path.
+- [x] **7. Fixture username leaks (broad sweep)** — `sed crsmi → testuser` across all `src/telemetry/__tests__/fixtures/`. 528 tests still green.
+- [ ] **8. `.claude/CLAUDE.md` workflow scrub** — re-audit needed; most lines are legitimate repo-dev guidance (ports, worktree rules). Decide what's actually personal vs how-to-work-in-this-repo.
+- [x] **9. Greenshot reference** — `src/commands/ss.md` generalized to `SHOTS_DIR` / `SHOTS_LATEST` env vars. Port numbers (3000/3001/3002) intentionally kept — they're Construct's actual architecture, not personal config.
 
 ## Other pre-publish concerns
 
