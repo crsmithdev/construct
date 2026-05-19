@@ -12,16 +12,16 @@ const r = createResults();
 
 console.log("--- install preservation ---");
 
-const sentinelPath = resolve(Bun.env.HOME!, ".claude/construct/core/identity/TEST_SENTINEL.md");
-const sentinelContent = "# Test Sentinel\n\nThis file tests upgrade preservation.\n";
-mkdirSync(resolve(Bun.env.HOME!, ".claude/construct/core/identity"), { recursive: true });
+const sentinelPath = resolve(Bun.env.HOME!, ".construct/identity/TEST_SENTINEL.md");
+const sentinelContent = "# Test Sentinel\n\nThis file tests user-side preservation across install.\n";
+mkdirSync(resolve(Bun.env.HOME!, ".construct/identity"), { recursive: true });
 writeFileSync(sentinelPath, sentinelContent);
 check(r, "install: sentinel file created", existsSync(sentinelPath));
 
 try {
   execSync(`${BUN} ${resolve(ROOT, "install.ts")}`, { encoding: "utf-8", timeout: 30000, cwd: ROOT, stdio: "pipe" });
-  check(r, "install: sentinel survived upgrade", existsSync(sentinelPath));
-  check(r, "install: sentinel content preserved", readFileSync(sentinelPath, "utf-8") === sentinelContent);
+  check(r, "install: user-side sentinel survived upgrade", existsSync(sentinelPath));
+  check(r, "install: user-side sentinel content preserved", readFileSync(sentinelPath, "utf-8") === sentinelContent);
 } catch (err: any) {
   check(r, "install: installer failed", false, err.message?.slice(0, 100));
 }

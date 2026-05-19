@@ -265,6 +265,7 @@ await mkdir(join(DATA_DIR, "sessions"), { recursive: true });
 await mkdir(join(DATA_DIR, "signals"), { recursive: true });
 await mkdir(join(DATA_DIR, "backups"), { recursive: true });
 await mkdir(join(DATA_DIR, "memory"), { recursive: true });
+await mkdir(join(DATA_DIR, "identity"), { recursive: true });
 
 const backupDir = await mkdtemp(join(tmpdir(), "construct-backup-"));
 
@@ -273,14 +274,9 @@ try {
   const migrated = await migrateData();
   step("migrate", migrated > 0 ? `${migrated} item${migrated !== 1 ? "s" : ""}` : "nothing to migrate");
 
-  // 2. Back up preserved ALL CAPS files
-  await mkdir(join(backupDir, "core/identity"), { recursive: true });
+  // 2. Back up preserved ALL CAPS files (memory only — identity files come from src)
   await mkdir(join(backupDir, "memory"), { recursive: true });
   let preserved = 0;
-  for (const f of await discoverAllCapsMd(join(DST, "construct/core/identity"))) {
-    await cp(join(DST, "construct/core/identity", f), join(backupDir, "core/identity", f));
-    preserved++;
-  }
   for (const f of await discoverAllCapsMd(join(DST, "construct/memory"))) {
     await cp(join(DST, "construct/memory", f), join(backupDir, "memory", f));
     preserved++;
@@ -342,7 +338,6 @@ try {
 
   // 9. Restore preserved files
   for (const [subdir, target] of [
-    ["core/identity", join(DST, "construct/core/identity")],
     ["memory", join(DST, "construct/memory")],
   ] as const) {
     const backupSub = join(backupDir, subdir);
