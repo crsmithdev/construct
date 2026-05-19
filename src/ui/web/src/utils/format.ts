@@ -163,8 +163,8 @@ export function parseToolSource(name: string): { server: string; tool: string } 
 }
 
 export function fmtProject(raw: string): string {
-  // "-home-crsmi-construct" → "crsmi/construct"
-  // "-home-crsmi" → "crsmi/~"
+  // "-home-user-project" → "user/project"
+  // "-home-user" → "user/~"
   const cleaned = raw.replace(/^-/, '').replace(/^home-/, '');
   const parts = cleaned.split('-').filter(Boolean);
   if (parts.length >= 2) return `${parts[0]}/${parts.slice(1).join('-')}`.toLowerCase();

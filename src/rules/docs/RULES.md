@@ -65,7 +65,7 @@ Cross-referenced by:
 
 ## E. Accuracy
 
-*Source: `/home/crsmi/construct/.claude/CLAUDE.md:18` (commandment 8) + project `/docs-review` skill extension*
+*Source: `.claude/CLAUDE.md` commandment 8 + project `/docs-review` skill extension*
 
 - Every claim about behavior must match the code in the same commit (no doc-code drift)
 - Don't reference functions, files, or flags that don't exist

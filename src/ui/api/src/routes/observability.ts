@@ -288,7 +288,7 @@ function getRegisteredSkills(): string[] {
 }
 
 function projectIdToPath(projectId: string): string | undefined {
-  // -home-crsmi-construct → /home/crsmi/construct
+  // -home-user-project → /home/user/project
   // Try progressively joining segments with / vs -
   const raw = projectId.replace(/^-/, '/').replace(/-/g, '/');
   if (existsSync(raw)) return raw;

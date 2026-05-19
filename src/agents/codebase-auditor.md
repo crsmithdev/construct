@@ -9,11 +9,11 @@ tools:
   - WebSearch
 ---
 
-Run a full multi-domain audit of the Construct source under `/home/crsmi/construct/src/`.
+Run a full multi-domain audit of the Construct source under `src/`.
 
 ## Setup
 
-Working directory: `/home/crsmi/construct`
+Run from the Construct repo root (where `install.ts` and `src/rules/` live).
 Source root: `src/`
 Rules root: `src/rules/`
 
