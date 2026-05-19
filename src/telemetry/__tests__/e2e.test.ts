@@ -209,7 +209,7 @@ const SESSIONS: SessionGroundTruth[] = [
 
 function setupTempDir(sessionDir: string): string {
   const base = join(tmpdir(), `telemetry-e2e-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
-  const projDir = join(base, "-home-crsmi-construct");
+  const projDir = join(base, "-home-testuser-construct");
   mkdirSync(projDir, { recursive: true });
 
   const srcDir = join(fixturesDir, sessionDir);
