@@ -92,20 +92,61 @@ Lives on `feat/plugin-packaging` worktree. Either land there, or coordinate afte
 
 ## Verification
 
+Pre-checks (file-system level — necessary but not sufficient):
+
 ```bash
 # 1. USER.md gone from repo, present in user dir
 test ! -f src/core/identity/USER.md && test -f ~/.construct/identity/USER.md
 echo "USER.md migrated"
 
-# 2. @-include chain resolves correctly inside a real session
-# (Run `/memory` inside Claude Code; confirm ~/.construct/identity/USER.md appears in the list)
-
-# 3. install roundtrip preserves user-side files
+# 2. install roundtrip preserves user-side files
 bun install.ts && bun test.ts
 
-# 4. install runs don't clobber the user's override files
+# 3. install runs don't clobber the user's override files
 diff -q ~/.construct/identity/USER.md <(echo "$KNOWN_CONTENT")
 ```
+
+### Final gate: startup-load test
+
+Files existing on disk and the install passing tests are not the same as the identity chain *actually loading into a session*. Before declaring this plan complete, prove the chain loads end-to-end.
+
+**Setup.** In each user-side override file, drop a unique marker on a fresh line:
+
+```bash
+echo "STARTUP_LOAD_MARKER_USER_a1b2"   >> ~/.construct/identity/USER.md
+echo "STARTUP_LOAD_MARKER_AGENTS_c3d4" >> ~/.construct/identity/AGENTS.override.md
+echo "STARTUP_LOAD_MARKER_SOUL_e5f6"   >> ~/.construct/identity/SOUL.override.md
+echo "STARTUP_LOAD_MARKER_STYLE_g7h8"  >> ~/.construct/identity/STYLE.override.md
+```
+
+**Test (non-interactive, repeatable):**
+
+```bash
+cd ~/construct
+unset ANTHROPIC_API_KEY  # so OAuth keychain is used
+claude -p "From your loaded CLAUDE.md chain, list every STARTUP_LOAD_MARKER_* string you see. One per line. Nothing else." \
+  | tee /tmp/identity-load.out
+```
+
+**Assertion.** Output must contain all four markers:
+
+```bash
+for m in USER_a1b2 AGENTS_c3d4 SOUL_e5f6 STYLE_g7h8; do
+  grep -q "STARTUP_LOAD_MARKER_$m" /tmp/identity-load.out || { echo "MISSING: $m"; exit 1; }
+done
+echo "all four override files loaded into session"
+```
+
+**Interactive companion (also confirm):** start a real `claude` session in `~/construct/`, run `/memory`, and verify each of the four `~/.construct/identity/*.md` paths appears in the loaded chain list. The non-interactive test above is the gate; this one catches the trust-prompt UX (V3) — first run will show the external-include approval dialog. Approve.
+
+**Cleanup:** remove the marker lines from each override file once the test passes.
+
+**What this catches that pre-checks don't:**
+
+- `@~/`-include expansion silently failing (V1 regression — covered by V1 verify, but this re-confirms in production layout)
+- Override files existing but Claude Code refusing to load them (V3 decline state stuck)
+- Wrong `@-include` line in `src/core/CLAUDE.md` (typo, wrong path, missing `~/`)
+- `discoverAllCapsMd` regression silently restoring an old USER.md to the deploy and shadowing the user-side one (this would show USER content but from the wrong location — verify the marker is from `~/.construct/identity/USER.md`, not the deploy copy, by `grep STARTUP_LOAD_MARKER ~/.claude/construct/core/identity/*.md` returning nothing)
 
 ## What this does NOT address
 
