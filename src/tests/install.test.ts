@@ -32,7 +32,7 @@ try { unlinkSync(sentinelPath); } catch {}
 console.log("\n--- identity files ---");
 
 const identityDir = resolve(ROOT, "src/core/identity");
-const expectedIdentity = ["SOUL.md", "STYLE.md", "USER.md"];
+const expectedIdentity = ["AGENTS.md", "SOUL.md", "STYLE.md"];
 for (const f of expectedIdentity) {
   const p = resolve(identityDir, f);
   check(r, `identity: ${f} exists`, existsSync(p));
@@ -42,6 +42,10 @@ for (const f of expectedIdentity) {
   }
 }
 
+// USER.md is user-side now — must NOT be in src or install dir
+check(r, "identity: USER.md not in src (moved to ~/.construct/identity/)",
+  !existsSync(resolve(identityDir, "USER.md")));
+
 const installedIdentityDir = resolve(Bun.env.HOME!, ".claude/construct/core/identity");
 if (existsSync(installedIdentityDir)) {
   for (const f of expectedIdentity) {
@@ -50,6 +54,8 @@ if (existsSync(installedIdentityDir)) {
       check(r, `identity: installed ${f} exists and non-empty`, readFileSync(dst, "utf-8").length > 10);
     }
   }
+  check(r, "identity: installed USER.md absent (lives at ~/.construct/identity/)",
+    !existsSync(resolve(installedIdentityDir, "USER.md")));
 }
 
 // ── Installed hooks ──────────────────────────────────────────────────────────
@@ -128,7 +134,19 @@ check(r, "CLAUDE.md: exists", existsSync(claudeMdPath));
 if (existsSync(claudeMdPath)) {
   const claudeMd = readFileSync(claudeMdPath, "utf-8");
   check(r, "CLAUDE.md: references @construct/core/CLAUDE.md", claudeMd.includes("@construct/core/CLAUDE.md"));
-  check(r, "CLAUDE.md: references @construct/core/identity/AGENTS.md", claudeMd.includes("@construct/core/identity/AGENTS.md") || claudeMd.includes("@construct/core/CLAUDE.md"));
+}
+
+// ── Installed core CLAUDE.md identity chain ─────────────────────────────────
+
+console.log("\n--- core CLAUDE.md identity chain ---");
+
+const coreClaudeMdPath = resolve(Bun.env.HOME!, ".claude/construct/core/CLAUDE.md");
+if (existsSync(coreClaudeMdPath)) {
+  const coreMd = readFileSync(coreClaudeMdPath, "utf-8");
+  check(r, "core CLAUDE.md: includes @identity/AGENTS.md", coreMd.includes("@identity/AGENTS.md"));
+  check(r, "core CLAUDE.md: includes @identity/SOUL.md", coreMd.includes("@identity/SOUL.md"));
+  check(r, "core CLAUDE.md: includes @identity/STYLE.md", coreMd.includes("@identity/STYLE.md"));
+  check(r, "core CLAUDE.md: includes user-side USER.md via ~/", coreMd.includes("@~/.construct/identity/USER.md"));
 }
 
 printAndExit(r);

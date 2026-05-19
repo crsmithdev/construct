@@ -1,7 +1,7 @@
 @identity/AGENTS.md
 @identity/SOUL.md
 @identity/STYLE.md
-@identity/USER.md
+@~/.construct/identity/USER.md
 
 # Verification
 

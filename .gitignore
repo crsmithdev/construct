@@ -7,6 +7,9 @@
 src/memory/sessions/
 src/memory/signals/
 
+# Personal identity (user-side at ~/.construct/identity/USER.md)
+src/core/identity/USER.md
+
 # Eval scratch data
 .eval-data/
 src/eval/results/
