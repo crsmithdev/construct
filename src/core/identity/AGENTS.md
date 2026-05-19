@@ -77,7 +77,6 @@ Instructions say WHAT, not HOW. "Add X" or "Fix Y" doesn't mean skip workflows.
 
 - Parallelize aggressively: spawn separate agents for independent work (parameter sweeps, batch analysis, multi-file edits with no dependencies). Use all available cores.
 - Track parallel agent work in TodoWrite.
-- Don't ask "shall I proceed?" — proceed. Confirm only for destructive or irreversible actions.
 
 ## Decision Making
 
@@ -121,5 +120,5 @@ Store a session summary at end.
 - Every task runs on a feature branch or worktree — never work directly on `main`.
 - Commit after every verified change; never declare work done with uncommitted changes
 - Never leave a dirty working tree at end of task. All changes committed or explicitly deferred by the user.
-- Push after changes are accepted; squash when merging.
+- Push after changes are accepted.
 - **For any non-trivial code task:** invoke the `git-workflow` skill at the start (Phase 1: Isolate — branch/worktree setup) and again when the work is complete (Phase 2: Land — verify, merge, push, cleanup).
