@@ -3,6 +3,7 @@
 @identity/STYLE.md
 @~/.construct/identity/USER.md
 @~/.construct/identity/AGENTS.override.md
+@~/.construct/identity/SOUL.override.md
 
 # Verification
 
